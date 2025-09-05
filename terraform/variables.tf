@@ -1,3 +1,7 @@
+variable "subscription_id" {
+  type = string
+}
+
 variable "resource_group_name" {
   type = string
 }
@@ -26,6 +30,14 @@ variable "nic_name" {
   type = string
 }
 
+variable "public_ip_name" {
+  type = string
+}
+
+variable "nsg_name" {
+  type = string
+}
+
 variable "vm_name" {
   type = string
 }
@@ -38,7 +50,11 @@ variable "admin_username" {
   type = string
 }
 
-variable "ssh_public_key_path" {
+variable "public_key_path" {
+  type = string
+}
+
+variable "os_disk_name" {
   type = string
 }
 
@@ -58,6 +74,18 @@ variable "image_version" {
   type = string
 }
 
-variable "subscription_id" {
+variable "my_public_ip" {
+  type = string
+}
+
+variable "dns_label" {
+  type = string
+}
+
+variable "storage_account_name" {
+  type = string
+}
+
+variable "storage_container_name" {
   type = string
 }
