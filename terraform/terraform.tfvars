@@ -34,3 +34,6 @@ storage_container_name = "tp1-data"
 
 # My IP
 my_public_ip = "91.160.185.229"
+
+# Monitoring
+alert_email_address = "cmpnn.romain@gmail.com"
