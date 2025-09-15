@@ -134,6 +134,3 @@ azurerm_linux_virtual_machine.vm: Creation complete after 49s [id=/subscriptions
 ```shell
 ssh -i .ssh/cloud_tp1_key azureuser@4.211.132.107
 ```
-
-
----
