@@ -10,135 +10,58 @@ resource "azurerm_monitor_action_group" "action_group" {
   }
 }
 
-# Create CPU and RAM alerts for each VM
-resource "azurerm_monitor_metric_alert" "cpu_alert_proxy" {
-  name                = "cpu-alert-${module.proxy_vm.vm_name}"
-  resource_group_name = azurerm_resource_group.rg.name
-  scopes              = [module.proxy_vm.vm_id]
-  description         = "Alert when CPU usage exceeds 70% on the proxy VM"
-  severity            = 2 # Severity 2: Warning
-
-  criteria {
-    metric_namespace = "Microsoft.Compute/virtualMachines"
-    metric_name      = "Percentage CPU"
-    aggregation      = "Average"
-    operator         = "GreaterThan"
-    threshold        = 70
+locals {
+  # A map of our VMs to easily loop over them
+  vms_for_monitoring = {
+    proxy   = module.proxy_vm
+    website = module.website_vm
+    db      = module.db_vm
   }
 
-  window_size = "PT5M"
-  frequency   = "PT1M"
+  # A map defining the alerts we want to create
+  alert_definitions = {
+    cpu = {
+      metric_name = "Percentage CPU"
+      operator    = "GreaterThan"
+      threshold   = 70
+      description = "Alert when CPU usage exceeds 70%"
+    },
+    ram = {
+      metric_name = "Available Memory Bytes"
+      operator    = "LessThan"
+      threshold   = 536870912 # 512 MiB
+      description = "Alert when available RAM drops below 512 MiB"
+    }
+  }
 
-  action {
-    action_group_id = azurerm_monitor_action_group.action_group.id
+  # Combine VMs and alerts into a single map for the for_each loop
+  # This creates entries like "proxy-cpu", "proxy-ram", "website-cpu", etc.
+  vm_alerts = {
+    for tuple in setproduct(keys(local.vms_for_monitoring), keys(local.alert_definitions)) :
+    "${tuple[0]}-${tuple[1]}" => {
+      vm_key      = tuple[0]
+      alert_key   = tuple[1]
+      vm_module   = local.vms_for_monitoring[tuple[0]]
+      alert_props = local.alert_definitions[tuple[1]]
+    }
   }
 }
 
-resource "azurerm_monitor_metric_alert" "ram_alert_proxy" {
-  name                = "ram-alert-${module.proxy_vm.vm_name}"
+# Create all alerts using a single resource block
+resource "azurerm_monitor_metric_alert" "vm_alerts" {
+  for_each            = local.vm_alerts
+  name                = "${each.value.alert_key}-alert-${each.value.vm_module.vm_name}"
   resource_group_name = azurerm_resource_group.rg.name
-  scopes              = [module.proxy_vm.vm_id]
-  description         = "Alert when available RAM drops below 512 MiB on the proxy VM"
+  scopes              = [each.value.vm_module.vm_id]
+  description         = "${each.value.alert_props.description} on the ${each.value.vm_key} VM"
   severity            = 2
 
   criteria {
     metric_namespace = "Microsoft.Compute/virtualMachines"
-    metric_name      = "Available Memory Bytes"
+    metric_name      = each.value.alert_props.metric_name
     aggregation      = "Average"
-    operator         = "LessThan"
-    threshold        = 536870912
-  }
-
-  window_size = "PT5M"
-  frequency   = "PT1M"
-
-  action {
-    action_group_id = azurerm_monitor_action_group.action_group.id
-  }
-}
-
-resource "azurerm_monitor_metric_alert" "cpu_alert_website" {
-  name                = "cpu-alert-${module.website_vm.vm_name}"
-  resource_group_name = azurerm_resource_group.rg.name
-  scopes              = [module.website_vm.vm_id]
-  description         = "Alert when CPU usage exceeds 70% on the website VM"
-  severity            = 2
-
-  criteria {
-    metric_namespace = "Microsoft.Compute/virtualMachines"
-    metric_name      = "Percentage CPU"
-    aggregation      = "Average"
-    operator         = "GreaterThan"
-    threshold        = 70
-  }
-
-  window_size = "PT5M"
-  frequency   = "PT1M"
-
-  action {
-    action_group_id = azurerm_monitor_action_group.action_group.id
-  }
-}
-
-resource "azurerm_monitor_metric_alert" "ram_alert_website" {
-  name                = "ram-alert-${module.website_vm.vm_name}"
-  resource_group_name = azurerm_resource_group.rg.name
-  scopes              = [module.website_vm.vm_id]
-  description         = "Alert when available RAM drops below 512 MiB on the website VM"
-  severity            = 2
-
-  criteria {
-    metric_namespace = "Microsoft.Compute/virtualMachines"
-    metric_name      = "Available Memory Bytes"
-    aggregation      = "Average"
-    operator         = "LessThan"
-    threshold        = 536870912
-  }
-
-  window_size = "PT5M"
-  frequency   = "PT1M"
-
-  action {
-    action_group_id = azurerm_monitor_action_group.action_group.id
-  }
-}
-
-resource "azurerm_monitor_metric_alert" "cpu_alert_db" {
-  name                = "cpu-alert-${module.db_vm.vm_name}"
-  resource_group_name = azurerm_resource_group.rg.name
-  scopes              = [module.db_vm.vm_id]
-  description         = "Alert when CPU usage exceeds 70% on the DB VM"
-  severity            = 2
-
-  criteria {
-    metric_namespace = "Microsoft.Compute/virtualMachines"
-    metric_name      = "Percentage CPU"
-    aggregation      = "Average"
-    operator         = "GreaterThan"
-    threshold        = 70
-  }
-
-  window_size = "PT5M"
-  frequency   = "PT1M"
-
-  action {
-    action_group_id = azurerm_monitor_action_group.action_group.id
-  }
-}
-
-resource "azurerm_monitor_metric_alert" "ram_alert_db" {
-  name                = "ram-alert-${module.db_vm.vm_name}"
-  resource_group_name = azurerm_resource_group.rg.name
-  scopes              = [module.db_vm.vm_id]
-  description         = "Alert when available RAM drops below 512 MiB on the DB VM"
-  severity            = 2
-
-  criteria {
-    metric_namespace = "Microsoft.Compute/virtualMachines"
-    metric_name      = "Available Memory Bytes"
-    aggregation      = "Average"
-    operator         = "LessThan"
-    threshold        = 536870912
+    operator         = each.value.alert_props.operator
+    threshold        = each.value.alert_props.threshold
   }
 
   window_size = "PT5M"

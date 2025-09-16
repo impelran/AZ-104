@@ -64,3 +64,27 @@ variable "proxy_ip" {
   type    = string
   default = null
 }
+
+variable "key_vault_name" {
+  description = "The name of the Key Vault."
+  type        = string
+  default     = null
+}
+
+variable "django_secret_name" {
+  description = "The name of the Django secret in Key Vault."
+  type        = string
+  default     = null
+}
+
+variable "db_user_secret_name" {
+  description = "The name of the database user secret in Key Vault."
+  type        = string
+  default     = null
+}
+
+variable "db_password_secret_name" {
+  description = "The name of the database password secret in Key Vault."
+  type        = string
+  default     = null
+}

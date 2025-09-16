@@ -1,9 +1,12 @@
+#!/bin/bash
+set -ex
+
 # Install Nginx
-sudo apt-get update
-sudo apt-get install -y nginx
+apt-get update
+apt-get install -y nginx
 
 # Configure Nginx to act as a reverse proxy
-sudo tee /etc/nginx/sites-available/default > /dev/null <<EOF
+tee /etc/nginx/sites-available/default > /dev/null <<EOF
 server {
     listen 80;
     server_name ${public_dns};
@@ -19,5 +22,5 @@ server {
 EOF
 
 # Restart Nginx
-sudo systemctl restart nginx
-sudo systemctl enable nginx
+systemctl restart nginx
+systemctl enable nginx

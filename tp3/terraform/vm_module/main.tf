@@ -3,6 +3,28 @@ locals {
   name_prefix = "tp3-${var.role}"
   public_ip_required = var.role == "proxy" ? true : false
   dns_label = var.role == "proxy" ? "${local.name_prefix}-vm" : null
+
+  custom_data_map = {
+    "website" = templatefile("${path.module}/website-init.sh", {
+      db_ip          = var.database_ip != null ? var.database_ip : ""
+      admin_username = var.admin_username,
+      key_vault_name = var.key_vault_name != null ? var.key_vault_name : "",
+      django_secret_name = var.django_secret_name != null ? var.django_secret_name : "",
+      db_user_secret_name = var.db_user_secret_name != null ? var.db_user_secret_name : "",
+      db_password_secret_name = var.db_password_secret_name != null ? var.db_password_secret_name : ""
+    })
+    "db" = templatefile("${path.module}/db-init.sh", {
+      website_ip = var.website_ip != null ? var.website_ip : "",
+      key_vault_name = var.key_vault_name != null ? var.key_vault_name : "",
+      db_user_secret_name = var.db_user_secret_name != null ? var.db_user_secret_name : "",
+      db_password_secret_name = var.db_password_secret_name != null ? var.db_password_secret_name : ""
+    })
+    "proxy" = templatefile("${path.module}/proxy-init.sh", {
+      website_ip = var.website_ip != null ? var.website_ip : ""
+      # The public_dns is only available if a public IP is created.
+      public_dns = local.public_ip_required ? azurerm_public_ip.public_ip[0].fqdn : ""
+    })
+  }
 }
 
 # Create a public IP address (only for the proxy VM)
@@ -30,7 +52,7 @@ resource "azurerm_network_security_group" "nsg" {
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "22"
-    source_address_prefix      = "${var.my_public_ip}/32"
+    source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
 
@@ -65,6 +87,20 @@ resource "azurerm_network_security_group" "nsg" {
     }
   }
 
+  dynamic "security_rule" {
+    for_each = var.role == "website" && var.proxy_ip != null ? [1] : []
+    content {
+      name                       = "Gunicorn"
+      priority                   = 101
+      direction                  = "Inbound"
+      access                     = "Allow"
+      protocol                   = "Tcp"
+      source_port_range          = "*"
+      destination_port_range     = "8000"
+      source_address_prefix      = "${var.proxy_ip}/32"
+      destination_address_prefix = "*"
+    }
+  }
 }
 
 # Create a network interface
@@ -96,6 +132,13 @@ resource "azurerm_linux_virtual_machine" "vm" {
   admin_username      = var.admin_username
   network_interface_ids = [azurerm_network_interface.nic.id]
 
+  dynamic "identity" {
+    for_each = var.role == "website" || var.role == "db" ? [1] : []
+    content {
+      type = "SystemAssigned"
+    }
+  }
+
   os_disk {
     name                 = "${local.name_prefix}-os-disk"
     caching              = "ReadWrite"
@@ -114,7 +157,5 @@ resource "azurerm_linux_virtual_machine" "vm" {
     public_key = file(var.public_key_path)
   }
 
-  custom_data = var.role == "website" ? base64encode(templatefile("${path.module}/website-init.sh", { db_ip = var.database_ip, admin_username = var.admin_username })) : (
-                var.role == "db" ? base64encode(templatefile("${path.module}/db-init.sh", {})) : (
-                var.role == "proxy" ? base64encode(templatefile("${path.module}/proxy-init.sh", { website_ip = var.website_ip, public_dns = azurerm_public_ip.public_ip[0].fqdn })) : null))
+  custom_data = base64encode(lookup(local.custom_data_map, var.role, null))
 }

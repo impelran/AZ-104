@@ -48,6 +48,10 @@ module "db_vm" {
   vm_size             = var.vm_size
   my_public_ip        = var.my_public_ip
   image_publisher     = var.image_publisher
+  website_ip          = module.website_vm.private_ip # Pass website IP to DB for NSG rule
+  key_vault_name      = azurerm_key_vault.kv.name
+  db_user_secret_name = azurerm_key_vault_secret.db_user.name
+  db_password_secret_name = azurerm_key_vault_secret.db_password.name
   image_offer         = var.image_offer
   image_sku           = var.image_sku
   image_version       = var.image_version
@@ -65,6 +69,10 @@ module "website_vm" {
   vm_size             = var.vm_size
   my_public_ip        = var.my_public_ip
   database_ip         = module.db_vm.private_ip
+  key_vault_name      = azurerm_key_vault.kv.name
+  django_secret_name  = azurerm_key_vault_secret.django_secret.name
+  db_user_secret_name = azurerm_key_vault_secret.db_user.name
+  db_password_secret_name = azurerm_key_vault_secret.db_password.name
   image_publisher     = var.image_publisher
   image_offer         = var.image_offer
   image_sku           = var.image_sku
