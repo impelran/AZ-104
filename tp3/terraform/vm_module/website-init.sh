@@ -18,14 +18,6 @@ echo "Verifying az command..."
 which az
 az --version
 
-# Install the Git repository
-cd ~
-git clone https://github.com/PMGN-org/PMGN_Website.git
-cd PMGN_Website
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
 # Fetch secrets from Key Vault and create an environment file for Django
 for i in {1..10}; do
   if az login --identity; then
@@ -72,7 +64,15 @@ echo "ALLOWED_HOSTS=${allowed_hosts}" >> /etc/django/environment
 chown ${admin_username}:${admin_username} /etc/django/environment
 chmod 600 /etc/django/environment
 
+# Install the Git repository
+sudo git clone https://github.com/PMGN-org/PMGN_Website.git
+cd PMGN_Website
+sudo python3 -m venv venv
+source venv/bin/activate
+sudo pip install -r requirements.txt
+
 # Start Gunicorn
+cd website
 DATABASE_URL='postgres://NK0NfF63SPlm:3Ijf%LHl)N{Hedl4{)t{RFJ&@10.0.1.5:5432/pmgndb' python manage.py migrate
 DATABASE_URL='postgres://NK0NfF63SPlm:3Ijf%LHl)N{Hedl4{)t{RFJ&@10.0.1.5:5432/pmgndb' python manage.py collectstatic
 SECURE_SSL_REDIRECT=False ALLOWED_HOSTS=tp3-proxy-vm.francecentral.cloudapp.azure.com,20.19.169.27,localhost,127.0.0.1,10.0.1.6 DATABASE_URL='postgres://NK0NfF63SPlm:3Ijf%LHl)N{Hedl4{)t{RFJ&@10.0.1.5:5432/pmgndb' DEBUG=True SECRET_KEY='L)9SHCvpWL_[VncW>8z<lx3FV=LGh7tiYrFPsZ]nVvEp_ervK8' gunicorn --chdir website --workers 5 --worker-class gevent website.wsgi:application -b 10.0.1.6:8000
