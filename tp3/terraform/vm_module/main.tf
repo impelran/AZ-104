@@ -1,33 +1,44 @@
-# Define local variables for naming
 locals {
-  name_prefix = "tp3-${var.role}"
+  name_prefix        = "tp3-${var.role}"
   public_ip_required = var.role == "proxy" ? true : false
-  dns_label = var.role == "proxy" ? "${local.name_prefix}-vm" : null
+  dns_label          = var.role == "proxy" ? "${local.name_prefix}-vm" : null
+
+  # Ensure this always resolves to a usable DNS name (avoids Bash :- in templates)
+  calculated_public_dns = (
+    local.public_ip_required && length(azurerm_public_ip.public_ip) > 0
+    ? azurerm_public_ip.public_ip[0].fqdn
+    : "tp3-proxy-vm.francecentral.cloudapp.azure.com"
+  )
 
   custom_data_map = {
     "website" = templatefile("${path.module}/website-init.sh", {
-      db_ip          = var.database_ip != null ? var.database_ip : ""
-      admin_username = var.admin_username,
-      key_vault_name = var.key_vault_name != null ? var.key_vault_name : "",
-      django_secret_name = var.django_secret_name != null ? var.django_secret_name : "",
-      db_user_secret_name = var.db_user_secret_name != null ? var.db_user_secret_name : "",
-      db_password_secret_name = var.db_password_secret_name != null ? var.db_password_secret_name : ""
+      db_ip                   = var.database_ip != null ? var.database_ip : ""
+      admin_username          = var.admin_username,
+      key_vault_name          = var.key_vault_name != null ? var.key_vault_name : "",
+      django_secret_name      = var.django_secret_name != null ? var.django_secret_name : "",
+      db_user_secret_name     = var.db_user_secret_name != null ? var.db_user_secret_name : "",
+      db_password_secret_name = var.db_password_secret_name != null ? var.db_password_secret_name : "",
+      allowed_hosts           = join(",", [
+        "tp3-proxy-vm.francecentral.cloudapp.azure.com",
+        "20.19.169.27",
+        "localhost",
+        "127.0.0.1",
+        azurerm_network_interface.nic.private_ip_address
+      ])
     })
     "db" = templatefile("${path.module}/db-init.sh", {
-      website_ip = var.website_ip != null ? var.website_ip : "",
-      key_vault_name = var.key_vault_name != null ? var.key_vault_name : "",
-      db_user_secret_name = var.db_user_secret_name != null ? var.db_user_secret_name : "",
+      website_ip              = var.website_ip != null ? var.website_ip : "",
+      key_vault_name          = var.key_vault_name != null ? var.key_vault_name : "",
+      db_user_secret_name     = var.db_user_secret_name != null ? var.db_user_secret_name : "",
       db_password_secret_name = var.db_password_secret_name != null ? var.db_password_secret_name : ""
     })
     "proxy" = templatefile("${path.module}/proxy-init.sh", {
-      website_ip = var.website_ip != null ? var.website_ip : ""
-      # The public_dns is only available if a public IP is created.
-      public_dns = local.public_ip_required ? azurerm_public_ip.public_ip[0].fqdn : ""
+      website_ip = var.website_ip != null ? var.website_ip : "",
+      public_dns = local.calculated_public_dns
     })
   }
 }
 
-# Create a public IP address (only for the proxy VM)
 resource "azurerm_public_ip" "public_ip" {
   count               = local.public_ip_required ? 1 : 0
   name                = "${local.name_prefix}-public-ip"
@@ -37,13 +48,11 @@ resource "azurerm_public_ip" "public_ip" {
   domain_name_label   = local.dns_label
 }
 
-# Create a network security group (NSG) and rules
 resource "azurerm_network_security_group" "nsg" {
   name                = "${local.name_prefix}-nsg"
   location            = var.location
   resource_group_name = var.resource_group_name
 
-  # Rule for SSH from your IP
   security_rule {
     name                       = "SSH"
     priority                   = 100
@@ -56,7 +65,6 @@ resource "azurerm_network_security_group" "nsg" {
     destination_address_prefix = "*"
   }
 
-  # Rules specific to each role
   dynamic "security_rule" {
     for_each = var.role == "proxy" ? [1] : []
     content {
@@ -103,7 +111,6 @@ resource "azurerm_network_security_group" "nsg" {
   }
 }
 
-# Create a network interface
 resource "azurerm_network_interface" "nic" {
   name                = "${local.name_prefix}-nic"
   location            = var.location
@@ -117,19 +124,17 @@ resource "azurerm_network_interface" "nic" {
   }
 }
 
-# Associate NSG to network interface
 resource "azurerm_network_interface_security_group_association" "nsg_association" {
   network_interface_id      = azurerm_network_interface.nic.id
   network_security_group_id = azurerm_network_security_group.nsg.id
 }
 
-# Create a Linux virtual machine
 resource "azurerm_linux_virtual_machine" "vm" {
-  name                = var.vm_name
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  size                = var.vm_size
-  admin_username      = var.admin_username
+  name                  = var.vm_name
+  location              = var.location
+  resource_group_name   = var.resource_group_name
+  size                  = var.vm_size
+  admin_username        = var.admin_username
   network_interface_ids = [azurerm_network_interface.nic.id]
 
   dynamic "identity" {
