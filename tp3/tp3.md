@@ -24,7 +24,7 @@
 ```shell
 eval "$(ssh-agent -s)"
 ssh-add ~/.ssh/cloud_tp3_key 
-ssh -A -i ~/.ssh/cloud_tp3_key azureuser@4.251.111.233 (vers la proxy-vm)
+ssh -A -i ~/.ssh/cloud_tp3_key azureuser@4.211.207.19 (vers la proxy-vm)
 ssh azureuser@10.0.1.6 (vers la website-vm)
 ```
 
